@@ -1,0 +1,51 @@
+---
+project:
+  title: "day-09"
+  output-dir: docs
+  
+format:
+  html:
+    self-contained: true 
+execute: 
+  echo: true
+---
+```{r}
+library(dplyr)
+library(visdat)
+library(tidyr)
+library(ggplot2)
+library(tidyverse)
+```
+```{r}
+?airquality
+vis_dat(airquality)
+```
+# The data does need cleaning.
+```{r}
+cleaned_airdata <- airquality %>% drop_na(Ozone) %>% drop_na(Solar.R)
+vis_dat(cleaned_airdata)
+summary(cleaned_airdata)
+```
+# The data is cleaned up now and I am choosing to use temperature as the predictor variable. I chose temperature because the ozone and temperature have a strong interaction as ozone formation is highly affected by temperature showing a positive correlation between the two.  
+```{r}
+model <- lm(Ozone ~ Temp, data = cleaned_airdata)
+summary(model)
+```
+# I think this is a valid model since there was a meaningful R-squared value, significant p-value results and a reasonable residual behavior. 
+# The R^2 means that about 48.8% of the variablility in Ozone levels is explained by the predictor of temperature. 
+```{r}
+a_data <- broom::augment(model, cleaned_airdata)
+head(a_data)
+```
+```{r}
+ggplot(a_data, aes(x = .fitted, y = Ozone)) +
+  geom_point() + 
+  geom_abline(intercept = 0, slope = 1, color = "red") +
+  labs(title = "Actual VS Predicted Ozone Levels",
+       subtitle = paste("Correlation:", round(cor(a_data$Ozone,
+                                                  a_data$.fitted),2)),
+       x = "Predicted Ozone Levels",
+       y = "Actual Ozone Levels") +
+  theme_minimal()
+```
+# The graph shows the linear relationship between the predicted and actual Ozone levels specifically showing a high correlation at 0.7. 
