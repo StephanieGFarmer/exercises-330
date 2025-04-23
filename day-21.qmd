@@ -1,0 +1,99 @@
+---
+title: "Daily Assignment 21"
+author: "Stephanie Farmer"
+date: "2025-04-18"
+format: html
+execute: 
+  echo: true
+---
+```{r}
+  
+library(dplyr)             
+library(dataRetrieval)
+library(tsibble)             
+
+
+# Example: Cache la Poudre River at Mouth (USGS site 06752260)
+poudre_flow <- readNWISdv(siteNumber = "06752260",    # Download data from USGS for site 06752260
+                          parameterCd = "00060",      # Parameter code 00060 = discharge in cfs)
+                          startDate = "2013-01-01",   # Set the start date
+                          endDate = "2023-12-31") |>  # Set the end date
+  renameNWISColumns() |>                              # Rename columns to standard names (e.g., "Flow", "Date")
+  mutate(Date = yearmonth(Date)) |>                   # Convert daily Date values into a year-month format (e.g., "2023 Jan")
+  group_by(Date) |>                                   # Group the data by the new monthly Date
+  summarise(Flow = mean(Flow))                       # Calculate the average daily flow for each month
+```
+
+## Convert to tsibble: 
+```{r}
+library(tsibble)
+
+# Convert the data frame to a tsibble
+poudre_flow_tsibble <- poudre_flow %>%
+  as_tsibble(index = Date)
+
+```
+
+## Plotting the time series:
+```{r}
+library(ggplot2)
+
+# Static plot
+ggplot(poudre_flow_tsibble, aes(x = Date, y = Flow)) +
+  geom_line() +
+  labs(title = "Monthly Average Flow: Cache la Poudre River",
+       x = "Date", y = "Flow (cfs)") +
+  theme_minimal()
+
+library(plotly)
+
+# Animated plot
+p <- ggplot(poudre_flow_tsibble, aes(x = Date, y = Flow)) +
+  geom_line() +
+  labs(title = "Monthly Average Flow: Cache la Poudre River",
+       x = "Date", y = "Flow (cfs)") +
+  theme_minimal()
+
+ggplotly(p)  # This creates an interactive, animated plot in plotly
+
+```
+
+## Subseries plot: 
+```{r}
+library(feasts)
+
+# Subseries plot
+poudre_flow_tsibble %>%
+  gg_subseries(Flow) +
+  labs(title = "Subseries Plot: Cache la Poudre River Flow") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 2))
+
+```
+### Describe what you see in the plot. How are “seasons” defined in this plot? What do you think the “subseries” represent?
+#### The plot shows obvious seasonal patterns in streamflow, with the peak flows occuring in May and June. In this graph, seasons are defined as calender months and each panel represents one month across the years of 2013 - 2024. The "subseries" represents the flow values for a specific month over multiple years. This allows for us to observe how streamflow changes from year to year within each month. 
+
+## Decompose:
+```{r}
+library(fable)
+library(feasts)
+library(fabletools)
+
+# STL decomposition with a chosen seasonal window
+poudre_decomp <- poudre_flow_tsibble %>%
+  model(
+    stl = STL(Flow ~ season(window = "periodic"))
+  )
+
+# Plot the decomposed components
+components(poudre_decomp) %>%
+  autoplot() +
+  labs(title = "STL Decomposition of Streamflow Data") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 12))
+
+```
+### Describe what you see in the plot. How do the components change over time? What do you think the trend and seasonal components represent?
+#### The STL decompostion plot shows the streamflow data broken down into 3 components: trend, season of the year, and residuals (remainders). The trend component changes gradually over time, showing periods of increasing and decreasing flow, which may reflect long-term climate variation or watershed changes. The seasonal component is consistent across years, with distinct peaks May and June and lower flows in winter. The remainder flucatuates over time unpredictably, highlighting short-term variations like storms and droughts. 
+
+

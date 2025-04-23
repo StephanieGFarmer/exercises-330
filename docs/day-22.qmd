@@ -1,0 +1,117 @@
+---
+title: "Daily Assignment 22"
+author: "Stephanie Farmer"
+date: "2025-04-22"
+format: html
+execute: 
+  echo: true
+---
+
+```{r}
+
+
+library(modeltime)
+library(modeltime.ensemble)
+library(tidymodels)
+library(timetk)
+library(prophet)
+library(lubridate)
+library(dataRetrieval)
+library(dplyr)
+library(ggplot2)
+library(yardstick)
+
+```
+
+```{r}
+# Reuse or re-load your monthly flow data
+poudre_flow <- readNWISdv(siteNumber = "06752260",
+                          parameterCd = "00060",
+                          startDate = "2013-01-01",
+                          endDate = "2023-12-31") |>
+  renameNWISColumns() |>
+  mutate(Date = as.Date(Date)) |>
+  mutate(Date = floor_date(Date, "month")) |>
+  group_by(Date) |>
+  summarise(Flow = mean(Flow, na.rm = TRUE)) |>
+  ungroup()
+
+```
+
+```{r}
+# Split the data
+splits <- initial_time_split(poudre_flow, prop = 0.9)
+
+# Models
+model_prophet <- prophet_reg() %>%
+  set_engine("prophet") %>%
+  fit(Flow ~ Date, data = training(splits))
+
+model_arima <- arima_reg() %>%
+  set_engine("auto_arima") %>%
+  fit(Flow ~ Date, data = training(splits))
+
+# Combine into Model Table
+models_tbl <- modeltime_table(
+  model_prophet,
+  model_arima
+)
+
+```
+
+```{r}
+# Future data frame
+future_tbl <- poudre_flow %>%
+  future_frame(.date_var = Date, .length_out = "12 months")
+
+# Forecast
+forecast_tbl <- models_tbl %>%
+  modeltime_refit(poudre_flow) %>%
+  modeltime_forecast(new_data = future_tbl, actual_data = poudre_flow)
+
+```
+
+```{r}
+# Replace with actual current date range (update accordingly if in 2025)
+obs_data <- readNWISdv(siteNumber = "06752260",
+                       parameterCd = "00060",
+                       startDate = "2024-01-01",
+                       endDate = "2024-12-31") |>
+  renameNWISColumns() |>
+  mutate(Date = as.Date(Date)) |>
+  mutate(Date = floor_date(Date, "month")) |>
+  group_by(Date) |>
+  summarise(Observed = mean(Flow, na.rm = TRUE)) |>
+  ungroup()
+
+```
+
+```{r}
+# Get just predictions
+predictions <- forecast_tbl %>%
+  filter(.key == "prediction") %>%
+  select(Date = .index, Predicted = .value)
+
+compare_df <- left_join(predictions, obs_data, by = "Date") %>%
+  drop_na()
+
+
+# Compute R² using linear regression
+r2_model <- lm(Observed ~ Predicted, data = compare_df)
+r2_value <- summary(r2_model)$r.squared
+print(paste("R² =", round(r2_value, 3)))
+
+```
+
+```{r}
+ggplot(compare_df, aes(x = Observed, y = Predicted)) +
+  geom_point(color = "blue", size = 2) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "gray") +  # 1:1 line
+  geom_smooth(method = "lm", se = FALSE, color = "red") +  # Regression line
+  labs(title = "Predicted vs Observed Streamflow",
+       subtitle = paste("R² =", round(r2_value, 3)),
+       x = "Observed Flow (cfs)", y = "Predicted Flow (cfs)") +
+  theme_minimal()
+
+```
+

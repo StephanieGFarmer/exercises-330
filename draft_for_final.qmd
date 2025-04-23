@@ -1,0 +1,72 @@
+---
+title: "Sea Level Rise Over Time (2010-2024)"
+format: html
+editor: visual
+---
+```{r}
+# Sea Level Rise in Virginia Key
+library(tidyverse)
+library(lubridate)
+
+slr_data <- read_csv("8723214_SLR_VirginiaKey.csv", skip = 4, 
+                     col_names = c("Year", "Month", "Monthly_MSL", "Linear_Trend", "High_Conf", "Low_Conf"))
+
+slr_data <- slr_data %>%
+  filter(!is.na(Year)) %>%
+  mutate(
+    Monthly_MSL = as.numeric(Monthly_MSL),  # convert to numeric!
+    date = make_date(Year, Month, 1)
+  ) %>%
+  filter(date >= as.Date("2010-01-01") & date <= as.Date("2024-12-31"))
+
+
+ggplot(slr_data, aes(x = date, y = Monthly_MSL)) +
+  geom_line(color = "#1F77B4", alpha = 0.5) +
+  geom_smooth(method = "lm", color = "#D62728", se = FALSE, size = 1.2) +
+  scale_y_continuous(
+    limits = c(0, 0.30),
+    breaks = seq(0, 0.30, by = 0.05),
+    labels = scales::number_format(accuracy = 0.01)
+  ) +
+  labs(
+    title = "Sea Level Trend at Virginia Key (2010–2024)",
+    x = "Date",
+    y = "Monthly Mean Sea Level (meters)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 8)
+  )
+
+
+
+
+```
+# Salinity Graph 
+```{r}
+# Load necessary libraries
+library(tidyverse)
+library(lubridate)
+
+# Read the CSV file
+salinity_data <- read_csv("salinity.csv")
+
+# Convert and filter
+salinity_data <- salinity_data %>%
+  mutate(Activity_StartDate = as.Date(Activity_StartDate)) %>%
+  filter(Activity_StartDate >= as.Date("2010-01-01") & Activity_StartDate <= as.Date("2024-12-31"),
+         Location_CountyName == "Miami-Dade County")
+
+# Plot salinity over time for Miami-Dade County
+ggplot(salinity_data, aes(x = Activity_StartDate, y = Result_Measure)) +
+  geom_line(color = "steelblue", size = 0.5) +
+  labs(title = "Salinity in Miami-Dade County (ppth, 2010–2024)",
+       x = "Date",
+       y = "Salinity (ppth)") +
+  theme_minimal()
+
+
+```
+
+
+

@@ -1,0 +1,130 @@
+---
+title: "day-11-12"
+format: 
+  html:
+    self-contained: true 
+editor: visual
+---
+
+# Part 1:
+
+```{r}
+data("airquality")
+str(airquality)
+summary(airquality)
+```
+
+## This data-set represents air quality and the variables that affect it, including Ozone, Solar Radiation, Wind, Temperature.
+
+```{r}
+shapiro.test(airquality$Ozone)
+shapiro.test(airquality$Solar.R)
+shapiro.test(airquality$Wind)
+shapiro.test(airquality$Temp)
+```
+
+## The Shapiro-Wilk normality test is used to access if a dataset comes from a normal distribution. The null hypothesis of this test was whether the data follows a normal distribution and the alternative hypothesis was the data does not follow a normal distribution.
+
+## Interpretting the p-value:
+
+### Ozone: reject the null, use alternative hypothesis because data does not follow a normal distribution
+
+### Solar radiation: reject the null, use alternative hypothesis because data does not follow a normal distribution
+
+### Wind: fail to reject the null, use the null hypothesis because data does follow a normal distribution
+
+### Temperature: reject the null, use the alternative hypothesis because data does not follow a normal distribution
+
+# Part 2:
+
+```{r}
+library(dplyr)
+
+airquality2 <- airquality |>
+  mutate(Season = case_when(Month %in% c(11, 12, 1) ~ "Winter", Month %in% c(2, 3, 4) ~ "Spring", Month %in% c(5, 6, 7) ~ "Summer", Month %in% c(8, 9, 10) ~ "Fall"))
+```
+
+```{r}
+table(airquality2$Season)
+```
+
+## There 61 observations for the season of Fall and 92 observations from the Summer season.
+
+# Part 3:
+
+```{r}
+library(recipes)
+
+rec <- airquality2 |>
+  recipe(~ Temp + Solar.R + Wind + Season) |>
+  step_normalize(all_numeric_predictors()) |>
+  step_dummy(all_nominal_predictors())
+```
+
+```{r}
+rec2 <- rec |>
+  step_impute_mean(all_numeric_predictors())
+rec_prep <- prep(rec, training = airquality2)
+processed_data <- bake(rec_prep, new_data = airquality2)
+```
+
+## Why is it necessary to both prep() and bake() the recipe?
+
+### The prep function is necessary to ensure that the preprocessing steps are based on the data so the transformations are fitted correctly. The bake function makes sure the transformations are applied consistently to all the data.
+
+# Part 4:
+```{r}
+model <- lm(Ozone ~ ., data = airquality)
+summary(model)
+```
+## The R-squared value explains about 62.5% of the variation in Ozone levels. The p-value shows the model is statistically significant. In terms of the coefficients, Temperature and wind have the strongest effects while day of the month is not a significant factor. 
+
+# Part 5:
+```{r}
+library(broom)
+library(ggplot2)
+library(ggpubr)
+library(dplyr)
+```
+```{r}
+
+airquality_clean <- na.omit(airquality)
+
+
+normalize <- function(x) (x - min(x)) / (max(x) - min(x))
+
+airquality_norm <- airquality_clean %>%
+  mutate(across(c(Ozone, Solar.R, Wind, Temp), normalize))
+
+model <- lm(Ozone ~ Solar.R + Wind + Temp + Month + Day, data = airquality_norm)
+
+
+augmented_data <- augment(model, data = airquality_norm)
+
+hist_resid <- ggplot(augmented_data, aes(.resid)) +
+  geom_histogram(bins = 20, fill = "blue", color = "black", alpha = 0.7) +
+  theme_minimal() +
+  ggtitle("Histogram of Residuals") +
+  xlab("Residuals") +
+  ylab("Frequency")
+
+
+qq_resid <- ggplot(augmented_data, aes(sample = .resid)) +
+  stat_qq() +
+  stat_qq_line(color = "red") +
+  theme_minimal() +
+  ggtitle("QQ Plot of Residuals")
+
+
+ggarrange(hist_resid, qq_resid, ncol = 2, nrow = 1)
+
+scatter_plot <- ggscatter(augmented_data, x = "Ozone", y = ".fitted",
+                          add = "reg.line", conf.int = TRUE,
+                          cor.coef = TRUE, cor.method = "spearman",
+                          ellipse = TRUE) +
+  ggtitle("Actual vs. Predicted Ozone Levels")
+
+print(scatter_plot)
+
+```
+## I think this is a strong enough model because the R-squared accounted for about 62.5% of the variation in ozone levels and the p-value was statistically significant. 
